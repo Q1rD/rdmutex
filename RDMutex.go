@@ -1,4 +1,4 @@
-package mutex
+package rdmutex
 
 import (
 	"errors"
@@ -46,23 +46,28 @@ func (dm *RDMutex) Lock() bool {
 // только читателем (после того, как Lock вернул false).
 func (dm *RDMutex) Wait() {
 	dm.mu.Lock()
-	defer dm.mu.Unlock()
 	for atomic.LoadInt32(&dm.writer) == 1 {
 		dm.writerCond.Wait()
 	}
+	dm.mu.Unlock()
 }
 
 // Unlock освобождает мьютекс, если вызывающий поток является писателем.
 // Возвращает ошибку, если мьютекс не заблокирован писателем.
 func (dm *RDMutex) Unlock() error {
 	dm.mu.Lock()
-	defer dm.mu.Unlock()
-	if atomic.LoadInt32(&dm.writer) == 1 {
-		atomic.StoreInt32(&dm.writer, 0)
-		dm.writerCond.Broadcast()
-		return nil
+
+	if atomic.LoadInt32(&dm.writer) != 1 {
+		dm.mu.Unlock()
+		return errors.New("разблокировка незаблокированного мьютекса")
 	}
-	return errors.New("разблокировка незаблокированного мьютекса")
+
+	atomic.StoreInt32(&dm.writer, 0)
+
+	dm.mu.Unlock()
+
+	dm.writerCond.Broadcast()
+	return nil
 }
 
 // RLock захватывает мьютекс в роли читателя, ожидая завершения работы активного писателя.

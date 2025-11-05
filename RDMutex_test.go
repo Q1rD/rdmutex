@@ -1,4 +1,4 @@
-package mutex
+package rdmutex
 
 import (
 	"sync/atomic"
